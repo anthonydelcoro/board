@@ -9,6 +9,8 @@ library only; the frontend is one HTML file.
 ```
 server.py            http.server + sqlite3, ~250 lines
 static/index.html    the entire frontend
+static/sw.js         service worker, for offline
+static/manifest.json plus the icon set
 docker-compose.yml   for TrueNAS
 ```
 
@@ -75,13 +77,32 @@ sqlite3 /mnt/pool/appdata/board/board.db \
 
 Then use Import in the UI.
 
+## Offline
+
+The board is cached in the browser, so the app opens and works with no network at
+all. Checks and edits are kept locally and pushed when the server comes back; the
+status area in the top bar says `offline - saved here` while that is the case.
+
+Add it to a phone home screen with Share -> Add to Home Screen. It runs standalone
+with its own icon.
+
 ## Multi-device
 
-Every write carries a version number. If your phone tries to save against a version
-the laptop already moved past, the server answers 409 and the phone takes the
-server's copy, with a toast explaining what happened. Open tabs also poll every 30
-seconds, so a change on one device shows up on the other without a reload. Polling
-pauses while you are typing or dragging so nothing gets yanked out from under you.
+Every write carries a version number. If your phone saves against a version the
+laptop already moved past, the server answers 409 and the two documents are merged
+with a three-way diff rather than one side overwriting the other:
+
+- Habit logs are sets of dates, so they union. A date deliberately unchecked on
+  either side stays unchecked instead of coming back.
+- Fields you did not touch take the other device's value; fields you did edit keep
+  yours.
+- Items added on one device survive; items deleted on one device stay deleted.
+- Order and section layout follow the device you are looking at.
+
+Open tabs poll every 30 seconds, so a change on one device shows up on the other
+without a reload. Polling pauses while you are typing or dragging so nothing gets
+yanked out from under you. Import is the one exception to merging: it deliberately
+replaces the board.
 
 ## API
 
