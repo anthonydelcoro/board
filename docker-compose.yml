@@ -1,0 +1,38 @@
+# Paste this into TrueNAS: Apps -> Discover Apps -> Custom App -> Install via YAML.
+#
+# Edit these three things first:
+#   1. the GitHub URL in the fetch command
+#   2. the two /mnt/pool paths, to match your datasets
+#   3. TZ, and BOARD_TOKEN if you want one
+#
+# The 'fetch' container clones or pulls your repo into the app directory and
+# exits. The 'board' container then serves that code. To deploy an update:
+# push to GitHub, then hit Restart on the app.
+
+services:
+  fetch:
+    image: alpine/git:latest
+    restart: "no"
+    command: >
+      sh -c "if [ -d /src/.git ];
+             then git -C /src pull --ff-only || echo 'pull failed, serving existing copy';
+             else git clone --depth 1 https://github.com/YOURNAME/board.git /src;
+             fi"
+    volumes:
+      - /mnt/pool/apps/board:/src
+
+  board:
+    image: python:3.12-alpine
+    command: python /app/server.py
+    depends_on:
+      fetch:
+        condition: service_completed_successfully
+    volumes:
+      - /mnt/pool/apps/board:/app:ro      # code, read-only: the app can't rewrite itself
+      - /mnt/pool/appdata/board:/data     # board.db lives here. Snapshot this one.
+    environment:
+      TZ: America/New_York                # required, or the day rolls over at the wrong hour
+      BOARD_TOKEN: ""                     # optional shared secret; empty means open on the tailnet
+    ports:
+      - 8420:8080
+    restart: unless-stopped
