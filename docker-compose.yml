@@ -18,7 +18,7 @@ services:
              else git clone --depth 1 https://github.com/anthonydelcoro/board.git /src;
              fi"
     volumes:
-      - /mnt/pool/apps/board:/src
+      - /mnt/tank/board:/src
 
   board:
     image: python:3.12-alpine
