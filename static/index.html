@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Board</title>
-<meta name="build" content="2026-09-04-resize">
+<meta name="build" content="2026-09-04-scroll">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -186,8 +186,7 @@
      what works on the phone. */
   @media (min-width:1200px){
     body{ display:flex; flex-direction:column; height:100vh; overflow:hidden; }
-    .board{ flex:1; min-height:0; align-items:stretch;
-            max-width:1720px; width:100%; margin:0 auto; padding:18px; }
+    .board{ flex:1; min-height:0; align-items:stretch; width:100%; padding:18px; }
     /* Each list carries its own width. Drag the right edge to set it;
        the value lives in the document, so it follows you to every device. */
     .col{ display:flex; flex-direction:column; max-height:100%;
@@ -200,11 +199,20 @@
     .resizer:hover::after, .resizer.on::after{ background:var(--faint); }
     .col.folded{ align-self:flex-start; }
     .col-body{ flex:1; min-height:0; overflow-y:auto; overflow-x:hidden;
-               padding-right:4px; scrollbar-width:thin;
-               scrollbar-color:var(--bg) transparent; }
-    .col-body::-webkit-scrollbar{ width:8px; }
-    .col-body::-webkit-scrollbar-thumb{ background:var(--bg); border-radius:4px; }
+               padding-right:2px;
+               scrollbar-width:thin; scrollbar-color:transparent transparent; }
+    .col:hover .col-body{ scrollbar-color:var(--line) transparent; }
+    /* The gutter is always reserved, so nothing shifts when the thumb
+       fades in. The transparent border insets the pill within it. */
+    .col-body::-webkit-scrollbar{ width:11px; }
     .col-body::-webkit-scrollbar-track{ background:transparent; }
+    .col-body::-webkit-scrollbar-thumb{ background:transparent; border-radius:99px;
+                                        border:3px solid transparent;
+                                        background-clip:padding-box; }
+    .col:hover .col-body::-webkit-scrollbar-thumb{ background:var(--line);
+                                                   background-clip:padding-box; }
+    .col-body::-webkit-scrollbar-thumb:hover{ background:var(--faint) !important;
+                                              background-clip:padding-box; }
   }
   /* a 4K panel at 100% scaling makes 15px text tiny */
   @media (min-width:1600px){
@@ -232,7 +240,7 @@
 <body>
 
 <div class="topbar">
-  <span class="brand" id="brand" title="build 2026-09-04-resize">Board</span>
+  <span class="brand" id="brand" title="build 2026-09-04-scroll">Board</span>
   <span class="today" id="today"></span>
   <span class="spacer"></span>
   <span class="status" id="status"></span>
@@ -624,7 +632,7 @@ function startResize(e, wrap, col){
   const startX = e.clientX, startW = wrap.getBoundingClientRect().width;
   handle.classList.add("on");
   const move = ev => {
-    const w = Math.max(240, Math.min(760, Math.round(startW + ev.clientX - startX)));
+    const w = Math.max(220, Math.min(1200, Math.round(startW + ev.clientX - startX)));
     col.width = w;
     wrap.style.setProperty("--w", w + "px");   /* live, without a re-render */
   };
@@ -1060,7 +1068,7 @@ document.getElementById("file").onchange = e => {
 let day = logicalToday();
 setInterval(() => { const d = logicalToday(); if(d !== day){ day = d; render(); } }, 30000);
 
-console.log("[board] build 2026-09-04-resize");
+console.log("[board] build 2026-09-04-scroll");
 boot();
 </script>
 </body>
