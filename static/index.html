@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Board</title>
-<meta name="build" content="2026-09-04-widths">
+<meta name="build" content="2026-09-04-resize">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -15,7 +15,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <style>
   /* Nothing here loads from the internet. To use Inter instead of the system
-     face, drop Inter.woff2 into static/ and uncomment this block . */
+     face, drop Inter.woff2 into static/ and uncomment this block. */
   /* @font-face{ font-family:"Inter"; src:url("/Inter.woff2") format("woff2");
                  font-weight:400 700; font-display:swap; } */
   :root{
@@ -54,6 +54,8 @@
   .col{ flex:0 0 302px; max-width:302px; background:var(--panel);
         border-radius:8px; padding:10px 8px 8px; }
   .col.dragging{ opacity:.35; }
+  .col{ position:relative; }
+  .resizer{ display:none; }
   .col-head{ display:flex; align-items:center; gap:2px; padding:0 2px 8px; }
   .chev{ color:var(--faint); font-size:11px; padding:4px; border-radius:4px; flex:none;
          transition:transform .12s ease; }
@@ -186,11 +188,16 @@
     body{ display:flex; flex-direction:column; height:100vh; overflow:hidden; }
     .board{ flex:1; min-height:0; align-items:stretch;
             max-width:1720px; width:100%; margin:0 auto; padding:18px; }
-    .col{ display:flex; flex-direction:column; max-height:100%; }
-    /* Task lists earn extra width - longer titles wrap less. Habit rows
-       are a fixed shape, so past this they just grow empty space. */
-    .col-tasks { flex:1 1 400px; min-width:320px; max-width:520px; }
-    .col-habits{ flex:1 1 320px; min-width:300px; max-width:340px; }
+    /* Each list carries its own width. Drag the right edge to set it;
+       the value lives in the document, so it follows you to every device. */
+    .col{ display:flex; flex-direction:column; max-height:100%;
+          flex:0 0 auto; width:var(--w, 400px); }
+    .board{ justify-content:center; justify-content:safe center; }
+    .resizer{ display:block; position:absolute; top:10px; bottom:10px; right:-8px;
+              width:14px; cursor:col-resize; touch-action:none; z-index:5; }
+    .resizer::after{ content:""; position:absolute; left:6px; top:0; bottom:0;
+                     width:2px; border-radius:1px; background:transparent; }
+    .resizer:hover::after, .resizer.on::after{ background:var(--faint); }
     .col.folded{ align-self:flex-start; }
     .col-body{ flex:1; min-height:0; overflow-y:auto; overflow-x:hidden;
                padding-right:4px; scrollbar-width:thin;
@@ -207,7 +214,6 @@
     .due, .count, .kind{ font-size:14px; }
     .add{ font-size:15px; }
     .row{ padding:6px 0; }
-    .col-tasks{ flex-basis:440px; }
   }
   @media (max-width:700px){
     .board{ flex-wrap:wrap; }
@@ -226,7 +232,7 @@
 <body>
 
 <div class="topbar">
-  <span class="brand" id="brand" title="build 2026-09-04-widths">Board</span>
+  <span class="brand" id="brand" title="build 2026-09-04-resize">Board</span>
   <span class="today" id="today"></span>
   <span class="spacer"></span>
   <span class="status" id="status"></span>
@@ -261,7 +267,7 @@ function setStatus(msg){ document.getElementById("status").textContent = msg; }
 
 function busy(){
   const a = document.activeElement;
-  return !!drag || !!document.querySelector(".pop") ||
+  return !!drag || resizing || !!document.querySelector(".pop") ||
          (a && (a.isContentEditable || a.tagName === "INPUT"));
 }
 
@@ -548,9 +554,12 @@ function render(){
   for(const col of state.cols) board.appendChild(renderCol(col));
 }
 
+const DEFAULT_W = { tasks:420, habits:300 };
+
 function renderCol(col){
   const wrap = el("div","col col-" + col.kind + (col.collapsed ? " folded" : ""));
   wrap.dataset.col = col.id;
+  wrap.style.setProperty("--w", (col.width || DEFAULT_W[col.kind] || 400) + "px");
 
   const head = el("div","col-head");
   const chev = el("button","chev" + (col.collapsed ? "" : " open"), "▶");
@@ -597,7 +606,37 @@ function renderCol(col){
   body.appendChild(addGrp);
   if(col.kind === "tasks") body.appendChild(renderDone(col));
   wrap.appendChild(body);
+
+  const rz = el("div","resizer");
+  rz.title = "Drag to set this list's width · double-click to reset";
+  rz.addEventListener("pointerdown", e => startResize(e, wrap, col));
+  rz.addEventListener("dblclick", () => { delete col.width; commit(); });
+  wrap.appendChild(rz);
   return wrap;
+}
+
+let resizing = false;
+function startResize(e, wrap, col){
+  if(e.button != null && e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  resizing = true;
+  const handle = e.currentTarget;
+  const startX = e.clientX, startW = wrap.getBoundingClientRect().width;
+  handle.classList.add("on");
+  const move = ev => {
+    const w = Math.max(240, Math.min(760, Math.round(startW + ev.clientX - startX)));
+    col.width = w;
+    wrap.style.setProperty("--w", w + "px");   /* live, without a re-render */
+  };
+  const up = () => {
+    document.removeEventListener("pointermove", move);
+    handle.classList.remove("on");
+    resizing = false;
+    save();
+  };
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", up, { once:true });
+  document.addEventListener("pointercancel", up, { once:true });
 }
 
 /* what a collapsed list is hiding, and whether you should care */
@@ -1021,7 +1060,7 @@ document.getElementById("file").onchange = e => {
 let day = logicalToday();
 setInterval(() => { const d = logicalToday(); if(d !== day){ day = d; render(); } }, 30000);
 
-console.log("[board] build 2026-09-04-widths");
+console.log("[board] build 2026-09-04-resize");
 boot();
 </script>
 </body>
