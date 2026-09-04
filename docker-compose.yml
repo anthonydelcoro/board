@@ -1,9 +1,8 @@
 # Paste this into TrueNAS: Apps -> Discover Apps -> Custom App -> Install via YAML.
 #
 # Edit these three things first:
-#   1. the GitHub URL in the fetch command
-#   2. the two /mnt/pool paths, to match your datasets
-#   3. TZ, and BOARD_TOKEN if you want one
+#   1. the two /mnt/pool paths, to match your datasets
+#   2. TZ, and BOARD_TOKEN if you want one
 #
 # The 'fetch' container clones or pulls your repo into the app directory and
 # exits. The 'board' container then serves that code. To deploy an update:
@@ -16,7 +15,7 @@ services:
     command: >
       sh -c "if [ -d /src/.git ];
              then git -C /src pull --ff-only || echo 'pull failed, serving existing copy';
-             else git clone --depth 1 https://github.com/YOURNAME/board.git /src;
+             else git clone --depth 1 https://github.com/anthonydelcoro/board.git /src;
              fi"
     volumes:
       - /mnt/pool/apps/board:/src
