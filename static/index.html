@@ -1,1 +1,748 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board</title>
+<style>
+  /* Nothing here loads from the internet. To use Inter instead of the system
+     face, drop Inter.woff2 into static/ and uncomment this block. */
+  /* @font-face{ font-family:"Inter"; src:url("/Inter.woff2") format("woff2");
+                 font-weight:400 700; font-display:swap; } */
+  :root{
+    color-scheme: dark;
+    --bg:#1e1f22; --panel:#2b2d31; --panel-2:#313338; --hover:#35373c;
+    --line:#3f4147; --text:#f2f3f5; --dim:#b5bac1; --faint:#80848e;
+    --accent:#5865f2; --green:#23a55a; --red:#f23f43; --amber:#f0b232;
+    --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font);
+        font-size:15px; line-height:1.4; -webkit-font-smoothing:antialiased; }
+  button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer; }
+  input{ font:inherit; }
+  :focus-visible{ outline:1px solid var(--faint); outline-offset:2px; border-radius:4px; }
+  input:focus{ outline:none; }
+  .new:focus{ border-color:var(--dim); }
+  [contenteditable]{ outline:none; }
 
+  /* ---------- top bar ---------- */
+  .topbar{ display:flex; align-items:center; gap:14px; padding:10px 16px;
+           background:var(--panel-2); border-bottom:1px solid var(--line);
+           position:sticky; top:0; z-index:30; }
+  .brand{ font-weight:700; letter-spacing:-.01em; }
+  .today{ color:var(--dim); font-size:13px; }
+  .spacer{ flex:1; }
+  .note{ font-size:12px; color:var(--faint); }
+  .status{ font-size:12px; color:var(--amber); }
+  .splash{ padding:40px 16px; color:var(--faint); font-size:14px; }
+  .tbtn{ padding:5px 10px; border-radius:4px; font-size:13px; font-weight:500; color:var(--dim); }
+  .tbtn:hover{ background:var(--hover); color:var(--text); }
+
+  /* ---------- board ---------- */
+  .board{ display:flex; gap:14px; align-items:flex-start; padding:16px; overflow-x:auto; }
+  .col{ flex:0 0 302px; max-width:302px; background:var(--panel);
+        border-radius:8px; padding:10px 8px 8px; }
+  .col.dragging{ opacity:.35; }
+  .col-head{ display:flex; align-items:center; gap:2px; padding:0 2px 8px; }
+  .chev{ color:var(--faint); font-size:11px; padding:4px; border-radius:4px; flex:none;
+         transition:transform .12s ease; }
+  .chev.open{ transform:rotate(90deg); }
+  .chev:hover{ background:var(--hover); color:var(--text); }
+  .col-title{ font-size:17px; font-weight:700; letter-spacing:-.01em; flex:1;
+              padding:2px 4px; border-radius:4px; min-width:0; }
+  .col-title:hover{ background:var(--hover); }
+  .kind{ font-size:11px; font-weight:600; color:var(--faint); padding:3px 5px;
+         border-radius:4px; flex:none; }
+  button.kind:hover{ background:var(--hover); color:var(--dim); }
+  .colgrip{ width:16px; text-align:center; color:var(--faint); opacity:0;
+            cursor:grab; touch-action:none; flex:none; font-size:12px; }
+  .col-head:hover .colgrip{ opacity:.5; }
+
+  /* collapsed list keeps its place and its width — title bar only */
+  .col.folded{ padding-bottom:10px; }
+  .col.folded .col-body{ display:none; }
+  .col.folded .col-head{ padding-bottom:0; }
+  .badge{ font-size:12px; font-weight:600; color:var(--faint); padding:0 5px; flex:none; }
+
+  /* ---------- sections ---------- */
+  .grp{ margin-bottom:12px; }
+  .grp-head{ display:flex; align-items:center; gap:4px; padding:0 4px 2px; }
+  .grp-title{ font-size:15px; font-weight:600; color:var(--text); flex:1;
+              padding:2px 4px; border-radius:4px; min-width:0; }
+  .grp-title:hover{ background:var(--hover); }
+  .rows{ min-height:6px; }
+
+  /* ---------- rows ---------- */
+  .row{ display:flex; align-items:flex-start; gap:7px; padding:5px 0 5px 0;
+        border-radius:4px; background:var(--panel); }
+  .row:hover{ background:var(--panel-2); }
+  .row.dragging{ opacity:.3; }
+  .grip{ flex:none; width:13px; text-align:center; color:var(--faint); font-size:12px;
+         opacity:0; cursor:grab; touch-action:none; height:21px; line-height:21px; }
+  .row:hover .grip{ opacity:.45; }
+  @media (hover:none){ .grip{ opacity:.35; } }
+  .box{ flex:none; width:17px; height:17px; margin-top:2px; border:2px solid var(--faint);
+        border-radius:5px; background:none; }
+  .box:hover{ border-color:var(--dim); }
+  .box.on{ background:var(--accent); border-color:var(--accent); position:relative; }
+  .box.hab.on{ background:var(--green); border-color:var(--green); }
+  .box.on::after{ content:""; position:absolute; left:4px; top:0;
+                  width:4px; height:9px; border:solid #fff; border-width:0 2px 2px 0;
+                  transform:rotate(42deg); }
+  .body{ flex:1 1 auto; min-width:0; }
+  .txt{ display:block; padding:1px 3px; border-radius:4px; word-break:break-word; }
+  .txt:hover{ background:var(--hover); }
+  .row.done .txt{ color:var(--faint); text-decoration:line-through; }
+
+  /* right rail: dates and counts share the same column */
+  .rail{ flex:none; display:flex; align-items:center; justify-content:flex-end;
+         min-width:52px; height:21px; }
+  .due{ font-size:13px; font-weight:600; color:var(--dim); padding:1px 5px; border-radius:4px; }
+  .due:hover{ background:var(--hover); }
+  .due.soon{ color:var(--amber); }
+  .due.late{ color:var(--red); }
+  .adddue{ font-size:13px; color:var(--faint); padding:1px 5px; border-radius:4px; opacity:0; }
+  .row:hover .adddue{ opacity:1; }
+  .adddue:hover{ background:var(--hover); color:var(--text); }
+  .count{ font-size:13px; font-weight:600; color:var(--dim); padding:1px 3px; }
+  .count.full{ color:var(--green); }
+  input[type=date]{ background:var(--bg); color:var(--text); border:1px solid var(--line);
+                    border-radius:4px; padding:1px 4px; font-size:12px; width:120px; }
+  .act{ flex:none; width:20px; text-align:center; color:var(--faint); font-size:13px;
+        opacity:0; border-radius:4px; height:21px; line-height:21px; }
+  .row:hover .act, .grp-head:hover .act, .col-head:hover .act{ opacity:1; }
+  .act:hover{ color:var(--red); background:var(--hover); }
+
+  /* ---------- habit strip ---------- */
+  .strip{ display:flex; gap:5px; margin-top:5px; padding-left:3px; }
+  .pip{ display:flex; flex-direction:column; align-items:center; gap:3px; }
+  .pip i{ width:9px; height:9px; border-radius:50%; background:var(--line); display:block; }
+  .pip.on i{ background:var(--green); }
+  .pip.future i{ background:#2f3136; }
+  .pip.now i{ box-shadow:0 0 0 2px var(--panel), 0 0 0 3px var(--dim); }
+  .row:hover .pip.now i{ box-shadow:0 0 0 2px var(--panel-2), 0 0 0 3px var(--dim); }
+  .pip s{ font-size:9px; color:var(--faint); text-decoration:none; font-weight:600; }
+
+  /* ---------- add / completed ---------- */
+  /* the + sits in the checkbox column; the label sits on the task-text baseline */
+  .add{ display:flex; align-items:center; width:100%; color:var(--faint); font-size:14px;
+        padding:5px 0 5px 20px; border-radius:4px; }
+  .add:hover{ background:var(--panel-2); color:var(--dim); }
+  .add-plus{ flex:none; width:17px; text-align:center; font-size:16px; line-height:1; }
+  .add-label{ margin-left:10px; }
+  .addgrp{ opacity:0; }
+  .col:hover .addgrp, .addgrp:focus-visible{ opacity:1; }
+  @media (hover:none){ .addgrp{ opacity:.6; } }
+  .new{ width:calc(100% - 38px); margin-left:38px; background:var(--bg); color:var(--text);
+        border:1px solid var(--line); border-radius:4px; padding:5px 8px; font-size:15px; }
+  .new::placeholder{ color:var(--faint); }
+  .done-head{ display:flex; align-items:center; gap:6px; width:100%; font-size:14px;
+              font-weight:600; color:var(--dim); padding:5px 4px; border-radius:4px; margin-top:4px; }
+  .done-head:hover{ background:var(--panel-2); }
+  .clear{ font-size:12px; color:var(--faint); padding:4px 8px; }
+  .clear:hover{ color:var(--red); }
+  .newcol{ flex:0 0 210px; padding:10px; border-radius:8px; border:1px dashed var(--line); }
+  .newcol .add{ justify-content:center; padding-left:0; }
+  .newcol .new{ margin-left:0; width:100%; }
+  .kinds{ display:flex; gap:6px; margin-top:8px; }
+  .kinds button{ flex:1; font-size:12px; font-weight:600; color:var(--dim);
+                 background:var(--panel); border-radius:4px; padding:5px 0; }
+  .kinds button:hover{ background:var(--accent); color:#fff; }
+  .toast{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
+          display:flex; align-items:center; gap:14px; z-index:200;
+          background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+          padding:10px 14px; font-size:14px; box-shadow:0 8px 24px rgba(0,0,0,.5); }
+  .toast button{ color:var(--accent); font-weight:600; }
+  .toast button:hover{ text-decoration:underline; }
+  .ghost{ position:fixed; z-index:100; pointer-events:none; background:var(--panel-2);
+          border-radius:6px; box-shadow:0 8px 20px rgba(0,0,0,.45); opacity:.95; }
+  @media (max-width:700px){
+    .board{ flex-wrap:wrap; }
+    .col, .col.folded{ flex:1 1 100%; max-width:none; }
+    .col.folded .col-head{ flex-direction:row; }
+    .col.folded .col-title{ writing-mode:horizontal-tb; }
+    .col.folded .badge{ writing-mode:horizontal-tb; }
+    .note{ display:none; }
+  }
+  @media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="brand">Board</span>
+  <span class="today" id="today"></span>
+  <span class="spacer"></span>
+  <span class="status" id="status"></span>
+  <button class="tbtn" id="export">Export</button>
+  <button class="tbtn" id="import">Import</button>
+</div>
+<div class="board" id="board"></div>
+<input type="file" id="file" accept="application/json" hidden>
+
+<script>
+"use strict";
+
+/* ===========================================================
+   SERVER SYNC
+   GET /api/state on load, debounced PUT on every change. The version
+   number is the guard: if the server has moved on because another
+   device wrote first, it answers 409 and we take its copy.
+   =========================================================== */
+const API = "/api/state";
+let version = 0, dirty = false, saving = false, timer = null;
+
+function setStatus(msg){ document.getElementById("status").textContent = msg; }
+
+function busy(){
+  const a = document.activeElement;
+  return !!drag || (a && (a.isContentEditable || a.tagName === "INPUT"));
+}
+
+async function boot(){
+  try{
+    const r = await fetch(API, { headers:{ Accept:"application/json" } });
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    version = d.version; state = d.doc;
+  }catch(err){
+    document.getElementById("board").innerHTML =
+      '<div class="splash">Can\'t reach the server. Check that the container is ' +
+      'running, then reload.</div>';
+    return;
+  }
+  render();
+  setInterval(poll, 30000);
+  document.addEventListener("visibilitychange", () => { if(!document.hidden) poll(); });
+}
+
+/* every mutation calls save(); it only schedules a push */
+function save(){ dirty = true; clearTimeout(timer); timer = setTimeout(push, 400); }
+
+async function push(){
+  if(saving || !dirty || !state) return;
+  saving = true; dirty = false;
+  try{
+    const r = await fetch(API, {
+      method:"PUT",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ version, doc: state })
+    });
+    if(r.status === 409){
+      const d = await r.json();
+      version = d.version; state = d.doc; render();
+      toast("This board changed on another device, so it reloaded.");
+    }else if(!r.ok){
+      throw new Error("HTTP " + r.status);
+    }else{
+      version = (await r.json()).version;
+      setStatus("");
+    }
+  }catch(err){
+    dirty = true;
+    setStatus("offline, retrying");
+    setTimeout(push, 5000);
+  }finally{
+    saving = false;
+    if(dirty){ clearTimeout(timer); timer = setTimeout(push, 400); }
+  }
+}
+
+/* pick up edits made on another device */
+async function poll(){
+  if(dirty || saving || busy()) return;
+  try{
+    const r = await fetch(API, { headers:{ Accept:"application/json" } });
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    if(d.version !== version){ version = d.version; state = d.doc; render(); }
+    setStatus("");
+  }catch(err){ setStatus("offline"); }
+}
+
+/* ===========================================================
+   TIME — 3 AM rollover, Monday weeks
+   =========================================================== */
+const RESET_HOUR = 3;
+const pad = n => String(n).padStart(2,"0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y,m-1,d); };
+const logicalToday = () => ymd(new Date(Date.now() - RESET_HOUR*3600e3));
+function addDays(s,n){ const d = parse(s); d.setDate(d.getDate()+n); return ymd(d); }
+function monday(s){ const d = parse(s); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return ymd(d); }
+function weekDays(s){ const m = monday(s); return [0,1,2,3,4,5,6].map(i => addDays(m,i)); }
+function mondaysInMonth(s){
+  const d = parse(s), y = d.getFullYear(), mo = d.getMonth(), out = [], c = new Date(y,mo,1);
+  while(c.getMonth() === mo){ if(c.getDay() === 1) out.push(ymd(c)); c.setDate(c.getDate()+1); }
+  return out;
+}
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const prettyDue = s => { const d = parse(s); return `${MON[d.getMonth()]} ${d.getDate()}`; };
+const uid = () => Math.random().toString(36).slice(2,10);
+
+/* ===========================================================
+   STATE
+   =========================================================== */
+let state = null;   /* filled in by boot() */
+const ui = { dueEdit:null, adding:null, openDone:{}, newCol:false };
+
+function findCol(id){ return state.cols.find(c => c.id === id); }
+function findItem(id){
+  for(const c of state.cols) for(const g of c.groups){
+    const i = g.items.findIndex(x => x.id === id);
+    if(i > -1) return { col:c, grp:g, item:g.items[i], idx:i };
+  }
+}
+const commit = () => { save(); render(); };
+
+/* ---- habit math ---- */
+const weekCount  = it => { const w = weekDays(logicalToday()); return it.log.filter(d => w.includes(d)).length; };
+const monthCount = it => { const p = logicalToday().slice(0,7); return it.log.filter(d => d.startsWith(p)).length; };
+
+/* ===========================================================
+   DOM HELPERS
+   =========================================================== */
+const el = (tag, cls, txt) => { const e = document.createElement(tag);
+  if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+
+/* "+" aligned to the checkbox column, label aligned to the task text */
+function addBtn(label, extra){
+  const b = el("button","add" + (extra ? " " + extra : ""));
+  b.appendChild(el("span","add-plus","+"));
+  b.appendChild(el("span","add-label",label));
+  return b;
+}
+
+/* Destructive actions delete immediately and offer undo. No confirm()
+   dialogs: they're blocked inside sandboxed frames and fail silently. */
+let toastEl = null, toastTimer = null;
+function withUndo(msg, fn){
+  const snap = JSON.stringify(state);
+  fn(); commit();
+  toast(msg, () => { state = JSON.parse(snap); commit(); });
+}
+function toast(msg, undo){
+  if(toastEl) toastEl.remove();
+  clearTimeout(toastTimer);
+  toastEl = el("div","toast");
+  toastEl.appendChild(el("span",null,msg));
+  if(undo){
+    const b = el("button",null,"Undo");
+    b.onclick = () => { undo(); toastEl.remove(); toastEl = null; };
+    toastEl.appendChild(b);
+  }
+  document.body.appendChild(toastEl);
+  toastTimer = setTimeout(() => { if(toastEl){ toastEl.remove(); toastEl = null; } }, 7000);
+}
+
+/* Writes through on every keystroke and never re-renders, so a click on
+   an adjacent button is never swallowed by a blur-triggered redraw. */
+function editable(node, get, set){
+  node.contentEditable = "true";
+  node.spellcheck = false;
+  node.textContent = get();
+  node.addEventListener("input", () => { set(node.textContent.trim()); save(); });
+  node.addEventListener("keydown", e => {
+    if(e.key === "Enter"){ e.preventDefault(); node.blur(); }
+    if(e.key === "Escape"){ node.blur(); }
+  });
+  node.addEventListener("blur", () => { if(!node.textContent.trim()){ node.textContent = get() || "Untitled"; set(node.textContent); save(); } });
+}
+
+/* ===========================================================
+   RENDER
+   =========================================================== */
+function render(){
+  if(!state) return;
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+  document.getElementById("today").textContent =
+    new Date(Date.now() - RESET_HOUR*3600e3)
+      .toLocaleDateString(undefined,{ weekday:"long", month:"long", day:"numeric" });
+  for(const col of state.cols) board.appendChild(renderCol(col));
+  board.appendChild(renderNewCol());
+}
+
+function renderCol(col){
+  const wrap = el("div","col" + (col.collapsed ? " folded" : ""));
+  wrap.dataset.col = col.id;
+
+  const head = el("div","col-head");
+  const chev = el("button","chev" + (col.collapsed ? "" : " open"), "▶");
+  chev.title = col.collapsed ? "Expand" : "Collapse";
+  chev.onclick = () => { col.collapsed = !col.collapsed; commit(); };
+  head.appendChild(chev);
+
+  const title = el("div","col-title");
+  editable(title, () => col.title, v => col.title = v);
+  head.appendChild(title);
+
+  if(col.collapsed) head.appendChild(el("span","badge", String(openCount(col))));
+
+  if(col.kind === "habits"){
+    const k = el("button","kind", col.cadence === "daily" ? "per week" : "per month");
+    k.title = "Switch to " + (col.cadence === "daily" ? "weekly" : "daily");
+    k.onclick = () => { col.cadence = col.cadence === "daily" ? "weekly" : "daily"; commit(); };
+    head.appendChild(k);
+  }
+  const grip = el("span","colgrip","⠿");
+  grip.title = "Drag to reorder list";
+  grip.addEventListener("pointerdown", e => startDrag(e, wrap, "col"));
+  head.appendChild(grip);
+  const del = el("button","act","✕");
+  del.title = "Delete list";
+  del.onclick = () => withUndo(`Deleted "${col.title}"`, () => {
+    state.cols = state.cols.filter(c => c.id !== col.id);
+  });
+  head.appendChild(del);
+  wrap.appendChild(head);
+
+  const body = el("div","col-body");
+  for(const grp of col.groups) body.appendChild(renderGrp(col, grp));
+  const addGrp = addBtn("Add section","addgrp");
+  addGrp.onclick = () => { col.groups.push({ id:uid(), title:"New section", items:[] }); commit(); };
+  body.appendChild(addGrp);
+  if(col.kind === "tasks") body.appendChild(renderDone(col));
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function openCount(col){
+  let n = 0;
+  for(const g of col.groups) for(const i of g.items) if(col.kind === "tasks" ? !i.done : true) n++;
+  return n;
+}
+
+function renderGrp(col, grp){
+  const wrap = el("div","grp");
+  wrap.dataset.grp = grp.id;
+
+  if(grp.title !== "" || col.groups.length > 1){
+    const head = el("div","grp-head");
+    const t = el("div","grp-title");
+    editable(t, () => grp.title, v => grp.title = v);
+    head.appendChild(t);
+    const del = el("button","act","✕");
+    del.title = "Delete section";
+    del.onclick = () => withUndo(`Deleted "${grp.title || "section"}"`, () => {
+      col.groups = col.groups.filter(g => g.id !== grp.id);
+      if(!col.groups.length) col.groups.push({ id:uid(), title:"", items:[] });
+    });
+    head.appendChild(del);
+    wrap.appendChild(head);
+  }
+
+  const rows = el("div","rows");
+  const list = col.kind === "tasks" ? grp.items.filter(i => !i.done) : grp.items;
+  for(const item of list) rows.appendChild(col.kind === "tasks" ? renderTask(item) : renderHabit(col, item));
+  wrap.appendChild(rows);
+
+  if(ui.adding === grp.id){
+    const inp = el("input","new");
+    inp.placeholder = col.kind === "tasks" ? "New task" : "New habit";
+    inp.onkeydown = e => {
+      if(e.key === "Enter" && inp.value.trim()){
+        const v = inp.value.trim();
+        grp.items.push(col.kind === "tasks"
+          ? { id:uid(), text:v, due:null, done:false }
+          : { id:uid(), text:v, log:[] });
+        save(); render();
+        const again = document.querySelector(".new"); if(again) again.focus();
+      }
+      if(e.key === "Escape"){ ui.adding = null; render(); }
+    };
+    inp.onblur = () => { if(!inp.value.trim()){ ui.adding = null; render(); } };
+    wrap.appendChild(inp);
+    setTimeout(() => inp.focus(), 0);
+  }else{
+    const add = addBtn(col.kind === "tasks" ? "Add task" : "Add habit");
+    add.onclick = () => { ui.adding = grp.id; render(); };
+    wrap.appendChild(add);
+  }
+  return wrap;
+}
+
+function rowShell(item, draggable){
+  const row = el("div","row");
+  row.dataset.item = item.id;
+  const grip = el("span","grip", draggable ? "⠿" : "");
+  if(draggable) grip.addEventListener("pointerdown", e => startDrag(e, row, "row"));
+  row.appendChild(grip);
+  return row;
+}
+
+function renderTask(item){
+  const row = rowShell(item, !item.done);
+  if(item.done) row.classList.add("done");
+
+  const box = el("button","box" + (item.done ? " on" : ""));
+  box.setAttribute("aria-label", item.text);
+  box.onclick = () => { item.done = !item.done; item.completedAt = item.done ? Date.now() : null; commit(); };
+  row.appendChild(box);
+
+  const body = el("div","body");
+  const txt = el("span","txt");
+  editable(txt, () => item.text, v => item.text = v);
+  body.appendChild(txt);
+  row.appendChild(body);
+
+  const rail = el("div","rail");
+  if(ui.dueEdit === item.id){
+    const inp = document.createElement("input");
+    inp.type = "date"; inp.value = item.due || logicalToday();
+    inp.onchange = () => { item.due = inp.value || null; ui.dueEdit = null; commit(); };
+    inp.onblur = () => { ui.dueEdit = null; render(); };
+    rail.appendChild(inp);
+    setTimeout(() => inp.focus(), 0);
+  }else if(item.due){
+    const t = logicalToday();
+    const cls = item.due < t ? " late" : (item.due <= addDays(t,1) ? " soon" : "");
+    const chip = el("button","due" + cls, prettyDue(item.due));
+    chip.title = "Change due date";
+    chip.onclick = () => { ui.dueEdit = item.id; render(); };
+    rail.appendChild(chip);
+  }else{
+    const b = el("button","adddue","+ date");
+    b.title = "Set due date";
+    b.onclick = () => { ui.dueEdit = item.id; render(); };
+    rail.appendChild(b);
+  }
+  row.appendChild(rail);
+
+  const del = el("button","act","✕");
+  del.title = "Delete task";
+  del.onclick = () => { const f = findItem(item.id); f.grp.items.splice(f.idx,1); commit(); };
+  row.appendChild(del);
+  return row;
+}
+
+function renderHabit(col, item){
+  const daily = col.cadence === "daily";
+  const t = logicalToday();
+  const on = daily ? item.log.includes(t) : weekCount(item) > 0;
+
+  const row = rowShell(item, true);
+  const box = el("button","box hab" + (on ? " on" : ""));
+  box.setAttribute("aria-label", item.text);
+  box.onclick = () => {
+    if(daily) item.log = on ? item.log.filter(d => d !== t) : item.log.concat(t);
+    else{ const w = weekDays(t); item.log = on ? item.log.filter(d => !w.includes(d)) : item.log.concat(t); }
+    commit();
+  };
+  row.appendChild(box);
+
+  const body = el("div","body");
+  const txt = el("span","txt");
+  editable(txt, () => item.text, v => item.text = v);
+  body.appendChild(txt);
+  body.appendChild(daily ? weekStrip(item) : monthStrip(item));
+  row.appendChild(body);
+
+  const n = daily ? weekCount(item) : monthCount(item);
+  const d = daily ? 7 : mondaysInMonth(t).length;
+  const rail = el("div","rail");
+  const c = el("span","count" + (n >= d ? " full" : ""), `${n}/${d}`);
+  c.title = daily ? "Done this week (Mon–Sun)" : "Done this month";
+  rail.appendChild(c);
+  row.appendChild(rail);
+
+  const del = el("button","act","✕");
+  del.title = "Delete habit";
+  del.onclick = () => { const f = findItem(item.id); f.grp.items.splice(f.idx,1); commit(); };
+  row.appendChild(del);
+  return row;
+}
+
+function weekStrip(item){
+  const s = el("div","strip"), t = logicalToday(), L = ["M","T","W","T","F","S","S"];
+  weekDays(t).forEach((d,i) => {
+    const p = el("div","pip" + (item.log.includes(d) ? " on" : "") + (d === t ? " now" : "") + (d > t ? " future" : ""));
+    p.appendChild(el("i")); p.appendChild(el("s",null,L[i])); p.title = d;
+    s.appendChild(p);
+  });
+  return s;
+}
+function monthStrip(item){
+  const s = el("div","strip"), t = logicalToday(), now = monday(t);
+  mondaysInMonth(t).forEach((m,i) => {
+    const days = weekDays(m), hit = item.log.some(d => days.includes(d));
+    const p = el("div","pip" + (hit ? " on" : "") + (m === now ? " now" : "") + (m > now ? " future" : ""));
+    p.appendChild(el("i")); p.appendChild(el("s",null,"W"+(i+1))); p.title = "Week of " + m;
+    s.appendChild(p);
+  });
+  return s;
+}
+
+function renderDone(col){
+  const wrap = el("div","done-list");
+  const items = [];
+  for(const g of col.groups) for(const i of g.items) if(i.done) items.push(i);
+  if(!items.length) return wrap;
+  items.sort((a,b) => (b.completedAt||0) - (a.completedAt||0));
+
+  const open = !!ui.openDone[col.id];
+  const head = el("button","done-head");
+  head.appendChild(el("span","chev" + (open ? " open" : ""),"▶"));
+  head.appendChild(el("span",null,`Completed (${items.length})`));
+  head.onclick = () => { ui.openDone[col.id] = !open; render(); };
+  wrap.appendChild(head);
+
+  if(open){
+    for(const i of items) wrap.appendChild(renderTask(i));
+    const clear = el("button","clear","Clear completed");
+    clear.onclick = () => withUndo(`Cleared ${items.length} completed task(s)`, () => {
+      for(const g of col.groups) g.items = g.items.filter(x => !x.done);
+    });
+    wrap.appendChild(clear);
+  }
+  return wrap;
+}
+
+function renderNewCol(){
+  const wrap = el("div","newcol");
+  if(!ui.newCol){
+    const b = addBtn("Add list");
+    b.onclick = () => { ui.newCol = true; render(); };
+    wrap.appendChild(b);
+    return wrap;
+  }
+  const inp = el("input","new");
+  inp.placeholder = "List name";
+  inp.onkeydown = e => { if(e.key === "Escape"){ ui.newCol = false; render(); } };
+  wrap.appendChild(inp);
+  const kinds = el("div","kinds");
+  const make = (label, kind, cadence) => {
+    const b = el("button",null,label);
+    b.onclick = () => {
+      const name = inp.value.trim() || label;
+      const c = { id:uid(), title:name, kind, collapsed:false, groups:[{ id:uid(), title:"", items:[] }] };
+      if(cadence) c.cadence = cadence;
+      state.cols.push(c); ui.newCol = false; commit();
+    };
+    kinds.appendChild(b);
+  };
+  make("Tasks","tasks",null); make("Daily","habits","daily"); make("Weekly","habits","weekly");
+  wrap.appendChild(kinds);
+  setTimeout(() => inp.focus(), 0);
+  return wrap;
+}
+
+/* ===========================================================
+   DRAG AND DROP — pointer events, works with touch
+   Rows move anywhere inside their own list. Lists reorder
+   across the board. On drop the model is rebuilt from DOM order.
+   =========================================================== */
+let drag = null;
+
+function startDrag(e, node, type){
+  if(e.button != null && e.button !== 0) return;
+  e.preventDefault();
+  const r = node.getBoundingClientRect();
+  const ghost = node.cloneNode(true);
+  ghost.className = node.className + " ghost";
+  ghost.style.width = r.width + "px";
+  ghost.style.left = r.left + "px";
+  ghost.style.top = r.top + "px";
+  document.body.appendChild(ghost);
+  node.classList.add("dragging");
+  drag = { type, node, ghost, dx:e.clientX - r.left, dy:e.clientY - r.top,
+           col: type === "row" ? node.closest(".col") : null };
+  e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId);
+  document.addEventListener("pointermove", onDragMove);
+  document.addEventListener("pointerup", onDragEnd, { once:true });
+  document.addEventListener("pointercancel", onDragEnd, { once:true });
+}
+
+function onDragMove(e){
+  if(!drag) return;
+  drag.ghost.style.left = (e.clientX - drag.dx) + "px";
+  drag.ghost.style.top  = (e.clientY - drag.dy) + "px";
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  if(!under) return;
+
+  if(drag.type === "row"){
+    const over = under.closest(".row[data-item]");
+    if(over && over !== drag.node && over.closest(".col") === drag.col && !over.closest(".done-list")){
+      const b = over.getBoundingClientRect();
+      const after = e.clientY > b.top + b.height/2;
+      over.parentNode.insertBefore(drag.node, after ? over.nextSibling : over);
+      return;
+    }
+    const rows = under.closest(".rows");
+    if(rows && rows.closest(".col") === drag.col && !rows.contains(drag.node)) rows.appendChild(drag.node);
+  }else{
+    const over = under.closest(".col");
+    if(over && over !== drag.node){
+      const b = over.getBoundingClientRect();
+      const after = e.clientX > b.left + b.width/2;
+      over.parentNode.insertBefore(drag.node, after ? over.nextSibling : over);
+    }
+  }
+}
+
+function onDragEnd(){
+  if(!drag) return;
+  document.removeEventListener("pointermove", onDragMove);
+  drag.ghost.remove();
+  drag.node.classList.remove("dragging");
+  if(drag.type === "row") rebuildRows(drag.col); else rebuildCols();
+  drag = null;
+  commit();
+}
+
+function rebuildRows(colEl){
+  const col = findCol(colEl.dataset.col);
+  if(!col) return;
+  const byId = new Map(), parked = [];
+  for(const g of col.groups) for(const it of g.items){
+    byId.set(it.id, it);
+    if(it.done) parked.push({ gid:g.id, it });   // completed tasks aren't in the DOM order
+  }
+  colEl.querySelectorAll(".grp").forEach(gEl => {
+    const g = col.groups.find(x => x.id === gEl.dataset.grp);
+    if(!g) return;
+    g.items = [...gEl.querySelectorAll(".rows > .row[data-item]")]
+      .map(r => byId.get(r.dataset.item)).filter(Boolean);
+  });
+  for(const p of parked){
+    const g = col.groups.find(x => x.id === p.gid) || col.groups[0];
+    if(!g.items.includes(p.it)) g.items.push(p.it);
+  }
+}
+
+function rebuildCols(){
+  const order = [...document.querySelectorAll(".board > .col")].map(c => c.dataset.col);
+  state.cols.sort((a,b) => order.indexOf(a.id) - order.indexOf(b.id));
+}
+
+/* ===========================================================
+   EXPORT / IMPORT
+   =========================================================== */
+document.getElementById("export").onclick = () => {
+  const blob = new Blob([JSON.stringify(state,null,2)], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `board-${logicalToday()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+document.getElementById("import").onclick = () => document.getElementById("file").click();
+document.getElementById("file").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{ const d = JSON.parse(r.result); if(!d.cols) throw 0; state = d; commit(); }
+    catch(err){ toast("That file isn't a board export."); }
+  };
+  r.readAsText(f);
+};
+
+let day = logicalToday();
+setInterval(() => { const d = logicalToday(); if(d !== day){ day = d; render(); } }, 30000);
+
+boot();
+</script>
+</body>
+</html>
