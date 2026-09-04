@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Board</title>
-<meta name="build" content="2026-09-04-scroll">
+<meta name="build" content="2026-09-04-hug">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -119,6 +119,8 @@
   /* right rail: dates and counts share the same column */
   .rail{ flex:none; display:flex; align-items:center; justify-content:flex-end;
          min-width:52px; height:21px; }
+  .rail.slim{ min-width:0; }
+  .rail.slim .adddue{ font-size:14px; padding:1px 3px; }
   .due{ font-size:13px; font-weight:600; color:var(--dim); padding:1px 5px; border-radius:4px; }
   .due:hover{ background:var(--hover); }
   .due.soon{ color:var(--amber); }
@@ -190,8 +192,11 @@
     /* Each list carries its own width. Drag the right edge to set it;
        the value lives in the document, so it follows you to every device. */
     .col{ display:flex; flex-direction:column; max-height:100%;
-          flex:0 0 auto; width:var(--w, 400px); }
-    .board{ justify-content:center; justify-content:safe center; }
+          flex:0 0 auto; width:var(--w, 400px);
+          max-width:none; min-width:0; }
+    .board{ justify-content:flex-start; }
+    .board > .col:first-child{ margin-left:auto; }
+    .board > .col:last-child { margin-right:auto; }
     .resizer{ display:block; position:absolute; top:10px; bottom:10px; right:-8px;
               width:14px; cursor:col-resize; touch-action:none; z-index:5; }
     .resizer::after{ content:""; position:absolute; left:6px; top:0; bottom:0;
@@ -240,7 +245,7 @@
 <body>
 
 <div class="topbar">
-  <span class="brand" id="brand" title="build 2026-09-04-scroll">Board</span>
+  <span class="brand" id="brand" title="build 2026-09-04-hug">Board</span>
   <span class="today" id="today"></span>
   <span class="spacer"></span>
   <span class="status" id="status"></span>
@@ -701,7 +706,9 @@ function renderGrp(col, grp){
 
   const rows = el("div","rows");
   const list = col.kind === "tasks" ? grp.items.filter(i => !i.done) : grp.items;
-  for(const item of list) rows.appendChild(col.kind === "tasks" ? renderTask(item) : renderHabit(col, item));
+  const dated = usesDates(col);
+  for(const item of list)
+    rows.appendChild(col.kind === "tasks" ? renderTask(item, dated) : renderHabit(col, item));
   wrap.appendChild(rows);
 
   if(ui.adding === grp.id){
@@ -738,7 +745,11 @@ function rowShell(item, draggable){
   return row;
 }
 
-function renderTask(item){
+function usesDates(col){
+  return col.groups.some(g => g.items.some(i => i.due));
+}
+
+function renderTask(item, dated){
   const row = rowShell(item, !item.done);
   if(item.done) row.classList.add("done");
 
@@ -753,7 +764,7 @@ function renderTask(item){
   body.appendChild(txt);
   row.appendChild(body);
 
-  const rail = el("div","rail");
+  const rail = el("div","rail" + (dated ? "" : " slim"));
   if(ui.dueEdit === item.id){
     const inp = document.createElement("input");
     inp.type = "date"; inp.value = item.due || logicalToday();
@@ -769,7 +780,7 @@ function renderTask(item){
     chip.onclick = () => { ui.dueEdit = item.id; render(); };
     rail.appendChild(chip);
   }else{
-    const b = el("button","adddue","+ date");
+    const b = el("button","adddue", dated ? "+ date" : "+");
     b.title = "Set due date";
     b.onclick = () => { ui.dueEdit = item.id; render(); };
     rail.appendChild(b);
@@ -856,7 +867,8 @@ function renderDone(col){
   wrap.appendChild(head);
 
   if(open){
-    for(const i of items) wrap.appendChild(renderTask(i));
+    const dated = usesDates(col);
+    for(const i of items) wrap.appendChild(renderTask(i, dated));
     const clear = el("button","clear","Clear completed");
     clear.onclick = () => withUndo(`Cleared ${items.length} completed task(s)`, () => {
       for(const g of col.groups) g.items = g.items.filter(x => !x.done);
@@ -1068,7 +1080,7 @@ document.getElementById("file").onchange = e => {
 let day = logicalToday();
 setInterval(() => { const d = logicalToday(); if(d !== day){ day = d; render(); } }, 30000);
 
-console.log("[board] build 2026-09-04-scroll");
+console.log("[board] build 2026-09-04-hug");
 boot();
 </script>
 </body>
