@@ -158,6 +158,34 @@
   .toast button:hover{ text-decoration:underline; }
   .ghost{ position:fixed; z-index:100; pointer-events:none; background:var(--panel-2);
           border-radius:6px; box-shadow:0 8px 20px rgba(0,0,0,.45); opacity:.95; }
+  /* ---------- desktop: fill the height, cap the width, center it ----------
+     Below 1200px nothing changes: the page stays one long scroll, which is
+     what works on the phone. */
+  @media (min-width:1200px){
+    body{ display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+    .board{ flex:1; min-height:0; align-items:stretch;
+            max-width:1720px; width:100%; margin:0 auto; padding:18px; }
+    .col{ display:flex; flex-direction:column; max-height:100%;
+          flex:1 1 320px; min-width:300px; max-width:430px; }
+    .col.folded{ align-self:flex-start; }
+    .col-body{ flex:1; min-height:0; overflow-y:auto; overflow-x:hidden;
+               padding-right:4px; scrollbar-width:thin;
+               scrollbar-color:var(--bg) transparent; }
+    .col-body::-webkit-scrollbar{ width:8px; }
+    .col-body::-webkit-scrollbar-thumb{ background:var(--bg); border-radius:4px; }
+    .col-body::-webkit-scrollbar-track{ background:transparent; }
+    .newcol{ align-self:flex-start; }
+  }
+  /* a 4K panel at 100% scaling makes 15px text tiny */
+  @media (min-width:1600px){
+    body{ font-size:16px; }
+    .txt, .grp-title, .new{ font-size:16px; }
+    .col-title{ font-size:18px; }
+    .due, .count, .kind{ font-size:14px; }
+    .add{ font-size:15px; }
+    .row{ padding:6px 0; }
+    .col{ flex-basis:380px; }
+  }
   @media (max-width:700px){
     .board{ flex-wrap:wrap; }
     .col, .col.folded{ flex:1 1 100%; max-width:none; }
@@ -273,9 +301,15 @@ const logicalToday = () => ymd(new Date(Date.now() - RESET_HOUR*3600e3));
 function addDays(s,n){ const d = parse(s); d.setDate(d.getDate()+n); return ymd(d); }
 function monday(s){ const d = parse(s); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return ymd(d); }
 function weekDays(s){ const m = monday(s); return [0,1,2,3,4,5,6].map(i => addDays(m,i)); }
-function mondaysInMonth(s){
-  const d = parse(s), y = d.getFullYear(), mo = d.getMonth(), out = [], c = new Date(y,mo,1);
-  while(c.getMonth() === mo){ if(c.getDay() === 1) out.push(ymd(c)); c.setDate(c.getDate()+1); }
+/* Every week that touches this month, keyed by its Monday. The first one
+   usually starts in the previous month - that is the point: the week you are
+   in right now must always have a slot to light up. */
+function monthWeeks(s){
+  const d = parse(s), y = d.getFullYear(), mo = d.getMonth();
+  const last = ymd(new Date(y, mo+1, 0));
+  const out = [];
+  let m = monday(ymd(new Date(y, mo, 1)));
+  while(m <= last){ out.push(m); m = addDays(m,7); }
   return out;
 }
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -299,7 +333,8 @@ const commit = () => { save(); render(); };
 
 /* ---- habit math ---- */
 const weekCount  = it => { const w = weekDays(logicalToday()); return it.log.filter(d => w.includes(d)).length; };
-const monthCount = it => { const p = logicalToday().slice(0,7); return it.log.filter(d => d.startsWith(p)).length; };
+const monthCount = it => monthWeeks(logicalToday())
+  .filter(m => weekDays(m).some(d => it.log.includes(d))).length;
 
 /* ===========================================================
    DOM HELPERS
@@ -541,7 +576,7 @@ function renderHabit(col, item){
   row.appendChild(body);
 
   const n = daily ? weekCount(item) : monthCount(item);
-  const d = daily ? 7 : mondaysInMonth(t).length;
+  const d = daily ? 7 : monthWeeks(t).length;
   const rail = el("div","rail");
   const c = el("span","count" + (n >= d ? " full" : ""), `${n}/${d}`);
   c.title = daily ? "Done this week (Mon–Sun)" : "Done this month";
@@ -566,7 +601,7 @@ function weekStrip(item){
 }
 function monthStrip(item){
   const s = el("div","strip"), t = logicalToday(), now = monday(t);
-  mondaysInMonth(t).forEach((m,i) => {
+  monthWeeks(t).forEach((m,i) => {
     const days = weekDays(m), hit = item.log.some(d => days.includes(d));
     const p = el("div","pip" + (hit ? " on" : "") + (m === now ? " now" : "") + (m > now ? " future" : ""));
     p.appendChild(el("i")); p.appendChild(el("s",null,"W"+(i+1))); p.title = "Week of " + m;
@@ -648,7 +683,18 @@ function startDrag(e, node, type){
   document.body.appendChild(ghost);
   node.classList.add("dragging");
   drag = { type, node, ghost, dx:e.clientX - r.left, dy:e.clientY - r.top,
-           col: type === "row" ? node.closest(".col") : null };
+           y:e.clientY, col: type === "row" ? node.closest(".col") : null };
+  /* columns scroll internally on desktop, so dragging near an edge
+     has to carry the list with it */
+  if(type === "row"){
+    drag.scroller = setInterval(() => {
+      const pane = drag.col && drag.col.querySelector(".col-body");
+      if(!pane || pane.scrollHeight <= pane.clientHeight) return;
+      const b = pane.getBoundingClientRect(), edge = 48;
+      if(drag.y < b.top + edge)         pane.scrollTop -= 14;
+      else if(drag.y > b.bottom - edge) pane.scrollTop += 14;
+    }, 30);
+  }
   e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId);
   document.addEventListener("pointermove", onDragMove);
   document.addEventListener("pointerup", onDragEnd, { once:true });
@@ -657,6 +703,7 @@ function startDrag(e, node, type){
 
 function onDragMove(e){
   if(!drag) return;
+  drag.y = e.clientY;
   drag.ghost.style.left = (e.clientX - drag.dx) + "px";
   drag.ghost.style.top  = (e.clientY - drag.dy) + "px";
   const under = document.elementFromPoint(e.clientX, e.clientY);
@@ -685,6 +732,7 @@ function onDragMove(e){
 function onDragEnd(){
   if(!drag) return;
   document.removeEventListener("pointermove", onDragMove);
+  clearInterval(drag.scroller);
   drag.ghost.remove();
   drag.node.classList.remove("dragging");
   if(drag.type === "row") rebuildRows(drag.col); else rebuildCols();
