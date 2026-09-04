@@ -2,8 +2,16 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Board</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#1e1f22">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Board">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <style>
   /* Nothing here loads from the internet. To use Inter instead of the system
      face, drop Inter.woff2 into static/ and uncomment this block. */
@@ -65,6 +73,9 @@
   .col.folded .col-body{ display:none; }
   .col.folded .col-head{ padding-bottom:0; }
   .badge{ font-size:12px; font-weight:600; color:var(--faint); padding:0 5px; flex:none; }
+  .badge.late{ color:var(--red); }
+  .badge.soon{ color:var(--amber); }
+  .badge.done{ color:var(--green); }
 
   /* ---------- sections ---------- */
   .grp{ margin-bottom:12px; }
@@ -72,7 +83,12 @@
   .grp-title{ font-size:15px; font-weight:600; color:var(--text); flex:1;
               padding:2px 4px; border-radius:4px; min-width:0; }
   .grp-title:hover{ background:var(--hover); }
+  .grpgrip{ flex:none; width:16px; text-align:center; color:var(--faint); font-size:12px;
+            opacity:0; cursor:grab; touch-action:none; }
+  .grp-head:hover .grpgrip{ opacity:.5; }
+  .grp.dragging{ opacity:.3; }
   .rows{ min-height:6px; }
+  .empty{ color:var(--faint); font-size:14px; padding:2px 0 6px 47px; }
 
   /* ---------- rows ---------- */
   .row{ display:flex; align-items:flex-start; gap:7px; padding:5px 0 5px 0;
@@ -106,7 +122,8 @@
   .adddue{ font-size:13px; color:var(--faint); padding:1px 5px; border-radius:4px; opacity:0; }
   .row:hover .adddue{ opacity:1; }
   .adddue:hover{ background:var(--hover); color:var(--text); }
-  .count{ font-size:13px; font-weight:600; color:var(--dim); padding:1px 3px; }
+  .count{ font-size:12px; font-weight:600; color:var(--faint);
+          align-self:flex-start; margin-left:9px; line-height:11px; }
   .count.full{ color:var(--green); }
   input[type=date]{ background:var(--bg); color:var(--text); border:1px solid var(--line);
                     border-radius:4px; padding:1px 4px; font-size:12px; width:120px; }
@@ -143,13 +160,15 @@
   .done-head:hover{ background:var(--panel-2); }
   .clear{ font-size:12px; color:var(--faint); padding:4px 8px; }
   .clear:hover{ color:var(--red); }
-  .newcol{ flex:0 0 210px; padding:10px; border-radius:8px; border:1px dashed var(--line); }
-  .newcol .add{ justify-content:center; padding-left:0; }
-  .newcol .new{ margin-left:0; width:100%; }
+  .pop{ position:fixed; z-index:150; width:236px; padding:10px; border-radius:8px;
+        background:var(--panel); border:1px solid var(--line);
+        box-shadow:0 10px 28px rgba(0,0,0,.5); }
+  .pop .new{ margin-left:0; width:100%; }
   .kinds{ display:flex; gap:6px; margin-top:8px; }
   .kinds button{ flex:1; font-size:12px; font-weight:600; color:var(--dim);
-                 background:var(--panel); border-radius:4px; padding:5px 0; }
+                 background:var(--panel-2); border-radius:4px; padding:6px 0; }
   .kinds button:hover{ background:var(--accent); color:#fff; }
+  .narrow{ display:none; }
   .toast{ position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
           display:flex; align-items:center; gap:14px; z-index:200;
           background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
@@ -166,7 +185,7 @@
     .board{ flex:1; min-height:0; align-items:stretch;
             max-width:1720px; width:100%; margin:0 auto; padding:18px; }
     .col{ display:flex; flex-direction:column; max-height:100%;
-          flex:1 1 320px; min-width:300px; max-width:430px; }
+          flex:1 1 400px; min-width:320px; max-width:520px; }
     .col.folded{ align-self:flex-start; }
     .col-body{ flex:1; min-height:0; overflow-y:auto; overflow-x:hidden;
                padding-right:4px; scrollbar-width:thin;
@@ -174,7 +193,6 @@
     .col-body::-webkit-scrollbar{ width:8px; }
     .col-body::-webkit-scrollbar-thumb{ background:var(--bg); border-radius:4px; }
     .col-body::-webkit-scrollbar-track{ background:transparent; }
-    .newcol{ align-self:flex-start; }
   }
   /* a 4K panel at 100% scaling makes 15px text tiny */
   @media (min-width:1600px){
@@ -184,7 +202,7 @@
     .due, .count, .kind{ font-size:14px; }
     .add{ font-size:15px; }
     .row{ padding:6px 0; }
-    .col{ flex-basis:380px; }
+    .col{ flex-basis:440px; }
   }
   @media (max-width:700px){
     .board{ flex-wrap:wrap; }
@@ -193,6 +211,9 @@
     .col.folded .col-title{ writing-mode:horizontal-tb; }
     .col.folded .badge{ writing-mode:horizontal-tb; }
     .note{ display:none; }
+    .wide{ display:none; }
+    .narrow{ display:inline; }
+    .board{ padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
   }
   @media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
 </style>
@@ -204,6 +225,7 @@
   <span class="today" id="today"></span>
   <span class="spacer"></span>
   <span class="status" id="status"></span>
+  <button class="tbtn" id="newlist"><span class="wide">+ List</span><span class="narrow">+</span></button>
   <button class="tbtn" id="export">Export</button>
   <button class="tbtn" id="import">Import</button>
 </div>
@@ -214,80 +236,200 @@
 "use strict";
 
 /* ===========================================================
-   SERVER SYNC
-   GET /api/state on load, debounced PUT on every change. The version
-   number is the guard: if the server has moved on because another
-   device wrote first, it answers 409 and we take its copy.
+   SYNC — offline first
+   The browser holds the truth it can see; the server holds the
+   truth everyone shares. A local cache means the app opens and
+   works with no network. When both sides moved, we merge with a
+   three-way diff rather than letting one side win.
    =========================================================== */
 const API = "/api/state";
-let version = 0, dirty = false, saving = false, timer = null;
+const CACHE_KEY = "board.cache.v1";
+let version = 0;      /* server version our base matches */
+let base = null;      /* the doc as the server last confirmed it */
+let pushTimer = null, retryTimer = null, pushing = false, overwrite = false;
+
+const clone = o => JSON.parse(JSON.stringify(o));
+const same  = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+const pending = () => !!base && !same(state, base);
 
 function setStatus(msg){ document.getElementById("status").textContent = msg; }
 
 function busy(){
   const a = document.activeElement;
-  return !!drag || (a && (a.isContentEditable || a.tagName === "INPUT"));
+  return !!drag || !!document.querySelector(".pop") ||
+         (a && (a.isContentEditable || a.tagName === "INPUT"));
 }
 
-async function boot(){
-  try{
-    const r = await fetch(API, { headers:{ Accept:"application/json" } });
-    if(!r.ok) throw new Error("HTTP " + r.status);
-    const d = await r.json();
-    version = d.version; state = d.doc;
-  }catch(err){
-    document.getElementById("board").innerHTML =
-      '<div class="splash">Can\'t reach the server. Check that the container is ' +
-      'running, then reload.</div>';
-    return;
+/* ---------- local cache ---------- */
+function cacheSave(){
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ version, base, doc: state })); }
+  catch(err){}
+}
+function cacheLoad(){
+  try{ const r = localStorage.getItem(CACHE_KEY); return r ? JSON.parse(r) : null; }
+  catch(err){ return null; }
+}
+
+/* ---------- three-way merge ----------
+   Unchanged here means take theirs; changed here means keep ours.
+   Habit logs are sets of dates, so they union - minus anything either
+   side deliberately unchecked. */
+function pick(b, l, r){ return same(l, b) ? r : l; }
+
+function mergeLog(b, l, r){
+  b = b || []; l = l || []; r = r || [];
+  const out = new Set([...l, ...r]);
+  /* a date that was in the base and is now missing from either side
+     was deliberately unchecked, so it does not come back */
+  for(const d of b) if(!l.includes(d) || !r.includes(d)) out.delete(d);
+  return [...out].sort();
+}
+
+function byId(list){ const m = {}; for(const x of (list||[])) m[x.id] = x; return m; }
+
+function mergeList(bl, ll, rl, one){
+  const bm = byId(bl), lm = byId(ll), rm = byId(rl), out = [];
+  for(const l of (ll||[])){
+    const r = rm[l.id], b = bm[l.id];
+    if(r) out.push(one(b, l, r));          // on both sides
+    else if(!b) out.push(clone(l));        // we added it
+    /* else: they deleted it, so let it go */
   }
-  render();
-  setInterval(poll, 30000);
-  document.addEventListener("visibilitychange", () => { if(!document.hidden) poll(); });
+  (rl||[]).forEach((r, i) => {
+    if(lm[r.id] || bm[r.id]) return;       // handled, or we deleted it
+    out.splice(Math.min(i, out.length), 0, clone(r));
+  });
+  return out;
 }
 
-/* every mutation calls save(); it only schedules a push */
-function save(){ dirty = true; clearTimeout(timer); timer = setTimeout(push, 400); }
+function mergeItem(b, l, r){
+  const out = clone(l);
+  for(const k of new Set([...Object.keys(l), ...Object.keys(r)])){
+    out[k] = (k === "log") ? mergeLog(b && b.log, l.log, r.log)
+                           : pick(b ? b[k] : undefined, l[k], r[k]);
+  }
+  return out;
+}
+function mergeGroup(b, l, r){
+  return { ...l,
+    title: pick(b && b.title, l.title, r.title),
+    items: mergeList(b && b.items, l.items, r.items, mergeItem) };
+}
+function mergeCol(b, l, r){
+  const out = { ...l };
+  for(const k of ["title","kind","cadence","collapsed"])
+    out[k] = pick(b ? b[k] : undefined, l[k], r[k]);
+  out.groups = mergeList(b && b.groups, l.groups, r.groups, mergeGroup);
+  return out;
+}
+function mergeDoc(b, l, r){
+  return { v: r.v || l.v, cols: mergeList(b.cols, l.cols, r.cols, mergeCol) };
+}
 
-async function push(){
-  if(saving || !dirty || !state) return;
-  saving = true; dirty = false;
+/* ---------- talking to the server ---------- */
+function adopt(remote){
+  state = remote.doc; base = clone(remote.doc); version = remote.version;
+  cacheSave();
+}
+
+function reconcile(remote){
+  if(!state || !base){ adopt(remote); return true; }
+  if(remote.version === version) return false;
+  if(!pending()){ adopt(remote); return true; }
+  const merged = mergeDoc(base, state, remote.doc);
+  const changed = !same(merged, state);
+  state = merged; base = clone(remote.doc); version = remote.version;
+  cacheSave();
+  if(changed) toast("Merged edits from another device.");
+  return true;
+}
+
+async function fetchState(){
+  const r = await fetch(API, { headers:{ Accept:"application/json" }, cache:"no-store" });
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+/* every mutation calls save(): cache now, push shortly */
+function save(){
+  cacheSave();
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(push, 400);
+}
+
+async function push(tries){
+  tries = tries || 0;
+  if(pushing || !state || !pending() || tries > 4) return;
+  pushing = true;
+  const attempt = clone(state);
   try{
     const r = await fetch(API, {
       method:"PUT",
       headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({ version, doc: state })
+      body: JSON.stringify({ version, doc: attempt })
     });
     if(r.status === 409){
-      const d = await r.json();
-      version = d.version; state = d.doc; render();
-      toast("This board changed on another device, so it reloaded.");
-    }else if(!r.ok){
-      throw new Error("HTTP " + r.status);
-    }else{
-      version = (await r.json()).version;
-      setStatus("");
+      const remote = await r.json();
+      if(overwrite){ base = clone(remote.doc); version = remote.version; }
+      else{
+        const merged = mergeDoc(base, state, remote.doc);
+        const changed = !same(merged, state);
+        state = merged; base = clone(remote.doc); version = remote.version;
+        if(changed){ render(); toast("Merged edits from another device."); }
+      }
+      cacheSave();
+      pushing = false;
+      return push(tries + 1);
     }
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    version = (await r.json()).version;
+    base = attempt;
+    overwrite = false;
+    cacheSave();
+    setStatus("");
+    if(pending()){ clearTimeout(pushTimer); pushTimer = setTimeout(push, 400); }
   }catch(err){
-    dirty = true;
-    setStatus("offline, retrying");
-    setTimeout(push, 5000);
+    setStatus("offline · saved here");
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => push(0), 5000);
   }finally{
-    saving = false;
-    if(dirty){ clearTimeout(timer); timer = setTimeout(push, 400); }
+    pushing = false;
   }
 }
 
-/* pick up edits made on another device */
 async function poll(){
-  if(dirty || saving || busy()) return;
+  if(pushing || busy()) return;
   try{
-    const r = await fetch(API, { headers:{ Accept:"application/json" } });
-    if(!r.ok) throw new Error("HTTP " + r.status);
-    const d = await r.json();
-    if(d.version !== version){ version = d.version; state = d.doc; render(); }
-    setStatus("");
-  }catch(err){ setStatus("offline"); }
+    const remote = await fetchState();
+    if(reconcile(remote)) render();
+    if(pending()) push(); else setStatus("");
+  }catch(err){ setStatus("offline · saved here"); }
+}
+
+async function boot(){
+  const cached = cacheLoad();
+  if(cached && cached.doc){
+    state = cached.doc; base = cached.base; version = cached.version || 0;
+    render();
+  }
+  try{
+    const remote = await fetchState();
+    reconcile(remote);
+    render();
+    if(pending()) push(); else setStatus("");
+  }catch(err){
+    if(!state){
+      document.getElementById("board").innerHTML =
+        '<div class="splash">Can\'t reach the server, and there is nothing cached ' +
+        'on this device yet. Open this once while connected.</div>';
+      return;
+    }
+    setStatus("offline · saved here");
+  }
+  setInterval(poll, 30000);
+  document.addEventListener("visibilitychange", () => { if(!document.hidden) poll(); });
+  window.addEventListener("online", () => { poll(); });
+  if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
 /* ===========================================================
@@ -393,11 +535,12 @@ function render(){
   if(!state) return;
   const board = document.getElementById("board");
   board.innerHTML = "";
+  const narrow = window.innerWidth < 700;
   document.getElementById("today").textContent =
-    new Date(Date.now() - RESET_HOUR*3600e3)
-      .toLocaleDateString(undefined,{ weekday:"long", month:"long", day:"numeric" });
+    new Date(Date.now() - RESET_HOUR*3600e3).toLocaleDateString(undefined,
+      narrow ? { weekday:"short", month:"short", day:"numeric" }
+             : { weekday:"long", month:"long", day:"numeric" });
   for(const col of state.cols) board.appendChild(renderCol(col));
-  board.appendChild(renderNewCol());
 }
 
 function renderCol(col){
@@ -414,7 +557,12 @@ function renderCol(col){
   editable(title, () => col.title, v => col.title = v);
   head.appendChild(title);
 
-  if(col.collapsed) head.appendChild(el("span","badge", String(openCount(col))));
+  if(col.collapsed){
+    const b = badgeFor(col);
+    const badge = el("span","badge" + b.cls, String(b.n));
+    badge.title = b.hint;
+    head.appendChild(badge);
+  }
 
   if(col.kind === "habits"){
     const k = el("button","kind", col.cadence === "daily" ? "per week" : "per month");
@@ -436,6 +584,9 @@ function renderCol(col){
 
   const body = el("div","col-body");
   for(const grp of col.groups) body.appendChild(renderGrp(col, grp));
+  if(!col.groups.some(g => g.items.length))
+    body.appendChild(el("div","empty",
+      col.kind === "tasks" ? "No tasks yet." : "No habits yet."));
   const addGrp = addBtn("Add section","addgrp");
   addGrp.onclick = () => { col.groups.push({ id:uid(), title:"New section", items:[] }); commit(); };
   body.appendChild(addGrp);
@@ -444,10 +595,33 @@ function renderCol(col){
   return wrap;
 }
 
-function openCount(col){
-  let n = 0;
-  for(const g of col.groups) for(const i of g.items) if(col.kind === "tasks" ? !i.done : true) n++;
-  return n;
+/* what a collapsed list is hiding, and whether you should care */
+function badgeFor(col){
+  const t = logicalToday();
+  if(col.kind === "tasks"){
+    let n = 0, late = 0, soon = 0;
+    for(const g of col.groups) for(const i of g.items){
+      if(i.done) continue;
+      n++;
+      if(!i.due) continue;
+      if(i.due < t) late++;
+      else if(i.due <= addDays(t,1)) soon++;
+    }
+    return { n,
+      cls: late ? " late" : (soon ? " soon" : ""),
+      hint: late ? `${late} overdue` : (soon ? `${soon} due within a day` : `${n} open`) };
+  }
+  const daily = col.cadence === "daily";
+  const week = weekDays(t);
+  let left = 0, total = 0;
+  for(const g of col.groups) for(const i of g.items){
+    total++;
+    const done = daily ? i.log.includes(t) : week.some(d => i.log.includes(d));
+    if(!done) left++;
+  }
+  return { n: left,
+    cls: total && !left ? " done" : "",
+    hint: left ? `${left} still to do` : "all done" };
 }
 
 function renderGrp(col, grp){
@@ -459,6 +633,10 @@ function renderGrp(col, grp){
     const t = el("div","grp-title");
     editable(t, () => grp.title, v => grp.title = v);
     head.appendChild(t);
+    const gg = el("span","grpgrip","⠿");
+    gg.title = "Drag to reorder section";
+    gg.addEventListener("pointerdown", e => startDrag(e, wrap, "grp"));
+    head.appendChild(gg);
     const del = el("button","act","✕");
     del.title = "Delete section";
     del.onclick = () => withUndo(`Deleted "${grp.title || "section"}"`, () => {
@@ -572,16 +750,17 @@ function renderHabit(col, item){
   const txt = el("span","txt");
   editable(txt, () => item.text, v => item.text = v);
   body.appendChild(txt);
-  body.appendChild(daily ? weekStrip(item) : monthStrip(item));
-  row.appendChild(body);
 
+  /* the count sits next to the dots it summarises, not out in the
+     date column where it would leave a canyon of empty space */
+  const strip = daily ? weekStrip(item) : monthStrip(item);
   const n = daily ? weekCount(item) : monthCount(item);
   const d = daily ? 7 : monthWeeks(t).length;
-  const rail = el("div","rail");
   const c = el("span","count" + (n >= d ? " full" : ""), `${n}/${d}`);
-  c.title = daily ? "Done this week (Mon–Sun)" : "Done this month";
-  rail.appendChild(c);
-  row.appendChild(rail);
+  c.title = daily ? "Done this week (Mon–Sun)" : "Weeks done this month";
+  strip.appendChild(c);
+  body.appendChild(strip);
+  row.appendChild(body);
 
   const del = el("button","act","✕");
   del.title = "Delete habit";
@@ -635,39 +814,63 @@ function renderDone(col){
   return wrap;
 }
 
-function renderNewCol(){
-  const wrap = el("div","newcol");
-  if(!ui.newCol){
-    const b = addBtn("Add list");
-    b.onclick = () => { ui.newCol = true; render(); };
-    wrap.appendChild(b);
-    return wrap;
-  }
+/* ---------- new list popover, anchored to the top bar ---------- */
+function closePop(){
+  const p = document.querySelector(".pop");
+  if(p) p.remove();
+  document.removeEventListener("pointerdown", popOutside, true);
+}
+function popOutside(e){
+  const p = document.querySelector(".pop");
+  if(p && !p.contains(e.target) && e.target.id !== "newlist") closePop();
+}
+function openNewList(){
+  if(document.querySelector(".pop")) return closePop();
+  const pop = el("div","pop");
   const inp = el("input","new");
   inp.placeholder = "List name";
-  inp.onkeydown = e => { if(e.key === "Escape"){ ui.newCol = false; render(); } };
-  wrap.appendChild(inp);
+  pop.appendChild(inp);
+
   const kinds = el("div","kinds");
   const make = (label, kind, cadence) => {
-    const b = el("button",null,label);
+    const b = el("button", null, label);
     b.onclick = () => {
-      const name = inp.value.trim() || label;
-      const c = { id:uid(), title:name, kind, collapsed:false, groups:[{ id:uid(), title:"", items:[] }] };
+      const c = { id:uid(), title: inp.value.trim() || label, kind, collapsed:false,
+                  groups:[{ id:uid(), title:"", items:[] }] };
       if(cadence) c.cadence = cadence;
-      state.cols.push(c); ui.newCol = false; commit();
+      state.cols.push(c);
+      closePop();
+      commit();
+      const node = document.querySelector('.col[data-col="' + c.id + '"]');
+      if(node) node.scrollIntoView({ behavior:"smooth", inline:"end", block:"nearest" });
     };
     kinds.appendChild(b);
+    return b;
   };
-  make("Tasks","tasks",null); make("Daily","habits","daily"); make("Weekly","habits","weekly");
-  wrap.appendChild(kinds);
-  setTimeout(() => inp.focus(), 0);
-  return wrap;
+  const first = make("Tasks","tasks",null);
+  make("Daily","habits","daily");
+  make("Weekly","habits","weekly");
+  pop.appendChild(kinds);
+
+  inp.onkeydown = e => {
+    if(e.key === "Escape") closePop();
+    if(e.key === "Enter") first.click();
+  };
+
+  document.body.appendChild(pop);
+  const r = document.getElementById("newlist").getBoundingClientRect();
+  pop.style.top = (r.bottom + 6) + "px";
+  pop.style.right = Math.max(8, window.innerWidth - r.right) + "px";
+  inp.focus();
+  setTimeout(() => document.addEventListener("pointerdown", popOutside, true), 0);
 }
+document.getElementById("newlist").onclick = openNewList;
 
 /* ===========================================================
    DRAG AND DROP — pointer events, works with touch
-   Rows move anywhere inside their own list. Lists reorder
-   across the board. On drop the model is rebuilt from DOM order.
+   Rows move anywhere inside their own list, sections reorder
+   within their list, and lists reorder across the board. On drop
+   the model is rebuilt from DOM order.
    =========================================================== */
 let drag = null;
 
@@ -683,10 +886,10 @@ function startDrag(e, node, type){
   document.body.appendChild(ghost);
   node.classList.add("dragging");
   drag = { type, node, ghost, dx:e.clientX - r.left, dy:e.clientY - r.top,
-           y:e.clientY, col: type === "row" ? node.closest(".col") : null };
+           y:e.clientY, col: type === "col" ? null : node.closest(".col") };
   /* columns scroll internally on desktop, so dragging near an edge
      has to carry the list with it */
-  if(type === "row"){
+  if(type !== "col"){
     drag.scroller = setInterval(() => {
       const pane = drag.col && drag.col.querySelector(".col-body");
       if(!pane || pane.scrollHeight <= pane.clientHeight) return;
@@ -719,6 +922,14 @@ function onDragMove(e){
     }
     const rows = under.closest(".rows");
     if(rows && rows.closest(".col") === drag.col && !rows.contains(drag.node)) rows.appendChild(drag.node);
+  }else if(drag.type === "grp"){
+    const over = under.closest(".grp");
+    if(over && over !== drag.node && !drag.node.contains(over) &&
+       over.closest(".col") === drag.col){
+      const b = over.getBoundingClientRect();
+      const after = e.clientY > b.top + b.height/2;
+      over.parentNode.insertBefore(drag.node, after ? over.nextSibling : over);
+    }
   }else{
     const over = under.closest(".col");
     if(over && over !== drag.node){
@@ -735,7 +946,9 @@ function onDragEnd(){
   clearInterval(drag.scroller);
   drag.ghost.remove();
   drag.node.classList.remove("dragging");
-  if(drag.type === "row") rebuildRows(drag.col); else rebuildCols();
+  if(drag.type === "row")      rebuildRows(drag.col);
+  else if(drag.type === "grp") rebuildGrps(drag.col);
+  else                         rebuildCols();
   drag = null;
   commit();
 }
@@ -760,6 +973,13 @@ function rebuildRows(colEl){
   }
 }
 
+function rebuildGrps(colEl){
+  const col = findCol(colEl.dataset.col);
+  if(!col) return;
+  const order = [...colEl.querySelectorAll(".col-body > .grp")].map(g => g.dataset.grp);
+  col.groups.sort((a,b) => order.indexOf(a.id) - order.indexOf(b.id));
+}
+
 function rebuildCols(){
   const order = [...document.querySelectorAll(".board > .col")].map(c => c.dataset.col);
   state.cols.sort((a,b) => order.indexOf(a.id) - order.indexOf(b.id));
@@ -781,7 +1001,13 @@ document.getElementById("file").onchange = e => {
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
   r.onload = () => {
-    try{ const d = JSON.parse(r.result); if(!d.cols) throw 0; state = d; commit(); }
+    try{
+      const d = JSON.parse(r.result);
+      if(!d.cols) throw 0;
+      state = d;
+      overwrite = true;      /* an import is a deliberate replacement, not an edit to merge */
+      commit();
+    }
     catch(err){ toast("That file isn't a board export."); }
   };
   r.readAsText(f);
