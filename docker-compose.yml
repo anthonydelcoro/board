@@ -27,8 +27,8 @@ services:
       fetch:
         condition: service_completed_successfully
     volumes:
-      - /mnt/pool/apps/board:/app:ro      # code, read-only: the app can't rewrite itself
-      - /mnt/pool/appdata/board:/data     # board.db lives here. Snapshot this one.
+      - /mnt/tank/board:/app:ro           # code, read-only: the app can't rewrite itself
+      - /mnt/tank/board:/data             # board.db lives here. Snapshot this one.
     environment:
       TZ: America/New_York                # required, or the day rolls over at the wrong hour
       BOARD_TOKEN: ""                     # optional shared secret; empty means open on the tailnet
